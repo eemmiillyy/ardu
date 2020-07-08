@@ -1,0 +1,29 @@
+html
+  head
+    title= title
+  body
+    h1= message
+    a(href = '/') Main
+    p name: #{user.username}
+    //- p email: #{user.email}
+    h1 system actions
+    p register device
+      form(action='/registerDevice', method='POST')
+        input(type='text' name='title' placeholder='title' required)
+        input(type='text' name='mac' placeholder='MAC' required)
+        input(type='submit')
+    p my devices list
+    ul
+      each device, index in devices.length ? devices : []
+        li
+          span= device.id + ", " + device.title + ", "
+          span= device.mac + ", " + (device.isactive ? "ACTIVE" : "NOT ACTIVE. ")
+          br
+          span= "Currently paired with: "
+          br
+          br
+          form(action='/sendBitThroughGui', method='POST')
+            input(type='checkbox' name='on' placeholder='on' label='on' value=1)
+            input(type='checkbox' name='off' placeholder='off' label='on' value=0)
+            input(type='submit')
+
