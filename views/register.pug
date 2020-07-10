@@ -1,0 +1,14 @@
+html
+  head
+    title register
+  body
+    h1 Register
+    form(action='/register', method='POST')
+        input(type='email' name='email' placeholder='Email' required)
+        input(type='text' name='username' placeholder='username' required)
+        input(type='text' name='firstName' placeholder='firstName' required)
+        input(type='text' name='lastName' placeholder='lastName' required)
+        input(type='text' name='countryCode' placeholder='countryCode' required)
+        input(type='password' name='passhash' placeholder='Password' required)
+        input(type='submit')
+    a(href='/login') Login

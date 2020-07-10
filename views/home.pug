@@ -5,25 +5,45 @@ html
     h1= message
     a(href = '/') Main
     p name: #{user.username}
-    //- p email: #{user.email}
-    h1 system actions
-    p register device
-      form(action='/registerDevice', method='POST')
-        input(type='text' name='title' placeholder='title' required)
-        input(type='text' name='mac' placeholder='MAC' required)
-        input(type='submit')
-    p my devices list
-    ul
-      each device, index in devices.length ? devices : []
-        li
-          span= device.id + ", " + device.title + ", "
-          span= device.mac + ", " + (device.isactive ? "ACTIVE" : "NOT ACTIVE. ")
-          br
-          span= "Currently paired with: "
-          br
-          br
-          form(action='/sendBitThroughGui', method='POST')
-            input(type='checkbox' name='on' placeholder='on' label='on' value=1)
-            input(type='checkbox' name='off' placeholder='off' label='on' value=0)
-            input(type='submit')
+    p email: #{user.email}
+    div
+      h2 Device List
+      table(style="width:100%; text-align:center")
+        thead
+          tr
+            th ID
+            th Name
+            th MAC
+            th isActive
+            th Paired with
+        tbody
+          each device, index in devices.length ? devices : []
+            tr(class=(index % 2 == 0) ? 'odd' : 'even') 
+              td= device.id
+              td= device.title
+              td= device.mac 
+              td= device.isactive
+              td= ""
+    div
+      h2 System Actions
+      div
+        h3 Switch light
+        button(type='button' value="on" onclick='clickButton(' + 1 + ')') on
+        button(type='button' value="off" onclick='clickButton(' + 0 + ')') off
+      div
+        h3 register device
+        form(action='/registerDevice', method='POST')
+          input(type='text' name='title' placeholder='name' required)
+          input(type='text' name='mac' placeholder='MAC' required)
+          input(type='submit')
 
+  script. 
+    function clickButton(value) {
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", "/sendBitThroughGui", true);
+      xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
+      xhr.onload = function() {
+        console.log(this.responseText);
+      }
+      xhr.send("value=" + value);
+    }

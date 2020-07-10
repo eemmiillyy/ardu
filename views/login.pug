@@ -1,0 +1,10 @@
+html
+  head
+    title login
+  body
+    h1 Login
+    form(action='/login', method='POST')
+        input(type='text' name='username' placeholder='username' required)
+        input(type='password' name='passhash' placeholder='Password' required)
+        input(type='submit')
+    a(href='/register') Register

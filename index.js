@@ -12,6 +12,8 @@ var cors = require("cors");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const saltRounds = process.env.SALT_ROUNDS;
+const SESSION_LIFETIME=24 * 60 * 60 * 1000
+
 
 /*********************************************************************
  *                           Database                                  *
@@ -84,7 +86,7 @@ app.use(
       pool: pool,
     }),
     name: process.env.SESSION_NAME,
-    cookie: { maxAge: process.env.SESSION_LIFETIME, secure: isProduction },
+    cookie: { maxAge: SESSION_LIFETIME, secure: isProduction },
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -131,22 +133,10 @@ const redirectHome = (req, res, next) => {
 app.get("/", (req, res) => {
   const { userId } = req.session;
   const { user } = req.app.locals;
-  res.send(
-    `<h1>Welcome </h1>
-    <h4><i>~~~~</i></h4>
-  ${
-    userId && user
-      ? `
-  <a href='/home'>Home</a>
-  <form method='post' action='/logout'>
-  <button>Logout</button>
-  </form>
- `
-      : ` <a href='/login'>Login</a>
-  <a href='/register'>Register</a>
-  `
-  }`
-  );
+  const props = {
+    user: user, userId: userId
+  }
+  res.render("welcome", props)
 });
 
 // home
@@ -165,31 +155,12 @@ app.get("/home", redirectLogin, async (req, res) => {
 
 // login
 app.get("/login", redirectHome, (req, res) => {
-  res.send(`
-  <h1>Login</h1>
-  <form method='post' action='/login'>
-    <input type='text' name='username' placeholder='Username' required />
-    <input type='password' name='passhash' placeholder='Password' required />
-    <input type='submit' />
-  </form>
-  <a href='/register'>Register</a>
-  `);
+  res.render("login");
 });
 
 // register
 app.get("/register", (req, res) => {
-  res.send(`<h1>Register</h1>
-  <form method='post' action='/register'>
-    <input type='email' name='email' placeholder='Email' required />
-    <input  name='username' placeholder='Username' required />
-    <input name='permission' placeholder='permission' required />
-    <input  name='firstName' placeholder='firstName' required />
-    <input name='lastName' placeholder='lastName' required />
-    <input name='countryCode' placeholder='countryCode' required />
-    <input type='password' name='passhash' placeholder='Password' required />
-    <input type='submit' />
-  </form>
-  <a href='/login'>Login</a>`);
+ res.render("register");
 });
 
 // post login
@@ -276,8 +247,7 @@ app.post("/logout", (req, res) => {
 });
 
 app.post("/sendBitThroughGui", async (req, res) => {
-  const { on } = req.body;
-  let value = on ? 1 : 0;
+  const {value} = req.body
   const userDevice = await getUserDevices(req.app.locals.user.id);
   const websocket = clients.filter(
     (websocket) => websocket.mac === formatMAC(userDevice[0].mac)
@@ -286,6 +256,7 @@ app.post("/sendBitThroughGui", async (req, res) => {
     processor.processMessage(websocket[0], value);
   }
   // todo: only refresh part of the page
+  // todo: only display on/off if devices are connected to ws
   res.status(200).redirect("/home");
 });
 

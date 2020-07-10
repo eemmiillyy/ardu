@@ -1,0 +1,14 @@
+html
+head
+  title welcome
+  body
+    h1 Welcome
+    if userId && user
+        a(href='/home') Home
+        form(method='POST' action='/logout')
+            button Logout 
+    else 
+        a(href='/login') Login
+        br
+        a(href='/register') Register
+
