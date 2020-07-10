@@ -11,9 +11,7 @@ var morgan = require("morgan");
 var cors = require("cors");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
-const { response, Router, request } = require("express");
-const { on } = require("process");
-const saltRounds = 10;
+const saltRounds = process.env.SALT_ROUNDS;
 
 /*********************************************************************
  *                           Database                                  *
@@ -29,8 +27,8 @@ const pool = new Pool({
 
 // rate limiting
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 10, // 10 requests on any endpoint per minute,
+  windowMs:process.env.RATE_LIMIT_WINDOWMS,
+  max: process.env.RATE_LIMIT_MAX,
 });
 
 /*********************************************************************
@@ -45,7 +43,7 @@ let alone = function() {
 const getUserDevices = async (id) => {
   const query = {
     name: "user-devices",
-    text: "SELECT * FROM device WHERE ownedBy = $1 LIMIT 100",
+    text: "SELECT * FROM device WHERE ownedBy = $1",
     values: [id],
   };
   return pool
@@ -75,7 +73,7 @@ const formatIP = (ip) => {
  *                           Server                                  *
  *********************************************************************/
 var app = express();
-var port = process.env.PORT || 7000;
+var port = process.env.PORT;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
@@ -86,7 +84,7 @@ app.use(
       pool: pool,
     }),
     name: process.env.SESSION_NAME,
-    cookie: { maxAge: 24 * 60 * 60 * 1000, secure: isProduction },
+    cookie: { maxAge: process.env.SESSION_LIFETIME, secure: isProduction },
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -199,7 +197,7 @@ app.post("/login", (req, res) => {
   const { passhash, username } = req.body;
   const query = {
     name: "login-user",
-    text: 'SELECT * FROM "user" WHERE username = $1 LIMIT 100',
+    text: 'SELECT * FROM "user" WHERE username = $1',
     values: [username],
   };
   try {
@@ -425,5 +423,5 @@ const interval = setInterval(function ping() {
     clients[i].isAlive = false;
     clients[i].ping();
   }
-}, 3000);
+}, process.env.HEARTBEAT_INTERVAL);
 interval;
