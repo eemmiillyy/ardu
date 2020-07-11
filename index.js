@@ -12,8 +12,7 @@ var cors = require("cors");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const saltRounds = process.env.SALT_ROUNDS;
-const SESSION_LIFETIME=24 * 60 * 60 * 1000
-
+const SESSION_LIFETIME = 24 * 60 * 60 * 1000;
 
 /*********************************************************************
  *                           Database                                  *
@@ -29,7 +28,7 @@ const pool = new Pool({
 
 // rate limiting
 const limiter = rateLimit({
-  windowMs:process.env.RATE_LIMIT_WINDOWMS,
+  windowMs: process.env.RATE_LIMIT_WINDOWMS,
   max: process.env.RATE_LIMIT_MAX,
 });
 
@@ -41,17 +40,71 @@ let alone = function() {
   return clients.length <= 1;
 };
 
+const updateUserLogin = async (userId) => {
+  const lastLogin = new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
+  const query = {
+    name: "update-user-login",
+    text: 'UPDATE "user" SET lastLogin = $1 WHERE id = $2',
+    values: [lastLogin, userId],
+  };
+  try {
+    pool.query(query, async (error, results) => {
+      if (error) {
+        console.log(error.stack);
+        throw error;
+      }
+      return results;
+    });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const updateDeviceLogin = async (mac) => {
+  const lastOnline = new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
+  const query = {
+    name: "update-device-last-online",
+    text: "UPDATE device SET lastOnline = $1 WHERE lower(mac) = $2",
+    values: [lastOnline, mac],
+  };
+  try {
+    pool.query(query, async (error, results) => {
+      if (error) {
+        console.log(error.stack);
+        throw error;
+      }
+      return results;
+    });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
 // one user devices
 const getUserDevices = async (id) => {
   const query = {
     name: "user-devices",
-    text: "SELECT * FROM device WHERE ownedBy = $1",
+    text:
+      "SELECT id, ownedBy, name, mac, model, locatedIn, lastOnline FROM device WHERE ownedBy = $1",
     values: [id],
   };
   return pool
     .query(query)
-    .then((res) => {
-      return res.rows;
+    .then((results) => {
+      const lastOnlineFormatted = results.rows[0]["lastonline"];
+      results.rows[0]["lastonline"] = lastOnlineFormatted
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ");
+      const formattedMac = formatMAC(results.rows[0]["mac"]);
+      results.rows[0]["mac"] = formattedMac;
+      return results.rows;
     })
     .catch((e) => {
       console.error(e.stack);
@@ -134,9 +187,10 @@ app.get("/", (req, res) => {
   const { userId } = req.session;
   const { user } = req.app.locals;
   const props = {
-    user: user, userId: userId
-  }
-  res.render("welcome", props)
+    user: user,
+    userId: userId,
+  };
+  res.render("welcome", props);
 });
 
 // home
@@ -160,7 +214,7 @@ app.get("/login", redirectHome, (req, res) => {
 
 // register
 app.get("/register", (req, res) => {
- res.render("register");
+  res.render("register");
 });
 
 // post login
@@ -168,8 +222,9 @@ app.post("/login", (req, res) => {
   const { passhash, username } = req.body;
   const query = {
     name: "login-user",
-    text: 'SELECT * FROM "user" WHERE username = $1',
-    values: [username],
+    text:
+      'SELECT id, username, email, firstName, lastName, countryCode, passhash FROM "user" WHERE lower(username) = $1',
+    values: [username.toLowerCase()],
   };
   try {
     pool.query(query, async (error, results) => {
@@ -181,8 +236,10 @@ app.post("/login", (req, res) => {
       const savedPasshash = results.rows[0] ? results.rows[0].passhash : "";
       const matches = await bcrypt.compare(passhash, savedPasshash);
       if (matches) {
-        req.session.userId = await results.rows[0].id; // the user exists so start a session
-        req.app.locals.user = await results.rows[0];
+        req.session.userId = results.rows[0].id; // the user exists so start a session
+        delete results.rows[0].passhash;
+        req.app.locals.user = results.rows[0];
+        await updateUserLogin(results.rows[0].id);
         res.redirect("/home");
       } else {
         req.app.locals.user = null;
@@ -202,25 +259,33 @@ app.post("/register", async (req, res) => {
   const {
     username,
     email,
-    permission,
     firstName,
     lastName,
     countryCode,
     passhash,
   } = req.body;
+  const createdAt = new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
+  const lastLogin = new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
   const hashedpass = await bcrypt.hash(passhash, saltRounds);
   const query = {
     name: "register-user",
     text:
-      'INSERT INTO "user" (username, email, permission, firstName, lastName, countryCode, passhash) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      'INSERT INTO "user" (username, email, firstName, lastName, countryCode, passhash, createdAt, lastLogin) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING username, email, firstName, lastName, countryCode',
     values: [
       username,
       email,
-      permission,
       firstName,
       lastName,
       countryCode,
       hashedpass,
+      createdAt,
+      lastLogin,
     ],
   };
   pool.query(query, async (error, results) => {
@@ -247,7 +312,7 @@ app.post("/logout", (req, res) => {
 });
 
 app.post("/sendBitThroughGui", async (req, res) => {
-  const {value} = req.body
+  const { value } = req.body;
   const userDevice = await getUserDevices(req.app.locals.user.id);
   const websocket = clients.filter(
     (websocket) => websocket.mac === formatMAC(userDevice[0].mac)
@@ -325,6 +390,7 @@ class Processor {
         });
         if (clientIndex > -1) {
           clients[clientIndex].mac = formatMAC(message);
+          await updateDeviceLogin(clients[clientIndex].mac);
         }
       } else {
         deviceController.multicast(websocket, message);
