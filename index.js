@@ -11,7 +11,7 @@ var morgan = require("morgan");
 var cors = require("cors");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
-const saltRounds = process.env.SALT_ROUNDS;
+const saltRounds = 10;
 const SESSION_LIFETIME = 24 * 60 * 60 * 1000;
 
 /*********************************************************************
@@ -97,6 +97,7 @@ const getUserDevices = async (id) => {
   return pool
     .query(query)
     .then((results) => {
+      if (results.rows.length == 0) return [];
       const lastOnlineFormatted = results.rows[0]["lastonline"];
       results.rows[0]["lastonline"] = lastOnlineFormatted
         .toISOString()
@@ -104,7 +105,7 @@ const getUserDevices = async (id) => {
         .replace("T", " ");
       const formattedMac = formatMAC(results.rows[0]["mac"]);
       results.rows[0]["mac"] = formattedMac;
-      return results.rows;
+      return results.rows ? results.rows : [];
     })
     .catch((e) => {
       console.error(e.stack);
@@ -170,8 +171,10 @@ const redirectHome = (req, res, next) => {
     return cookieString.includes(process.env.SESSION_NAME);
   });
   if (
-    (req.session.userId && req.app.locals.user) ||
-    (req.app.locals.user && containsTargetCookie) //req.session.userId may not exist when server first issues the cookie
+    (req.session.userId &&
+      req.app.locals.user &&
+      req.session.userId === req.app.locals.user.id) ||
+    (!req.session.userId && req.app.locals.user && containsTargetCookie) //req.session.userId may not exist when server first issues the cookie
   ) {
     res.redirect("/home");
   } else {
@@ -203,7 +206,6 @@ app.get("/home", redirectLogin, async (req, res) => {
     user: user,
     devices: userDevices,
   };
-
   res.render("home", props);
 });
 
@@ -213,17 +215,17 @@ app.get("/login", redirectHome, (req, res) => {
 });
 
 // register
-app.get("/register", (req, res) => {
+app.get("/register", redirectHome, (req, res) => {
   res.render("register");
 });
 
 // post login
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
   const { passhash, username } = req.body;
   const query = {
     name: "login-user",
     text:
-      'SELECT id, username, email, firstName, lastName, countryCode, passhash FROM "user" WHERE lower(username) = $1',
+      'SELECT id, username, email, firstName, lastName, passhash FROM "user" WHERE lower(username) = $1 LIMIT 1',
     values: [username.toLowerCase()],
   };
   try {
@@ -256,14 +258,7 @@ app.post("/login", (req, res) => {
 // to do is add email verification so a bot cannot signup with
 // many fake emails
 app.post("/register", async (req, res) => {
-  const {
-    username,
-    email,
-    firstName,
-    lastName,
-    countryCode,
-    passhash,
-  } = req.body;
+  const { username, email, firstName, lastName, passhash } = req.body;
   const createdAt = new Date()
     .toISOString()
     .slice(0, 19)
@@ -276,13 +271,12 @@ app.post("/register", async (req, res) => {
   const query = {
     name: "register-user",
     text:
-      'INSERT INTO "user" (username, email, firstName, lastName, countryCode, passhash, createdAt, lastLogin) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING username, email, firstName, lastName, countryCode',
+      'INSERT INTO "user" (username, email, firstName, lastName, passhash, createdAt, lastLogin) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING username, email, firstName, lastName LIMIT 1',
     values: [
       username,
       email,
       firstName,
       lastName,
-      countryCode,
       hashedpass,
       createdAt,
       lastLogin,
@@ -295,7 +289,7 @@ app.post("/register", async (req, res) => {
     }
     req.session.userId = await results.rows[0].id;
     req.app.locals.user = await results.rows[0];
-    res.redirect("/home"); // resolves to login if there is no session
+    res.redirect("/login"); // resolves to login if there is no session
   });
 });
 
