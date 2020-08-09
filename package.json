@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "aedes": "^0.42.5",
     "bcrypt": "^5.0.0",
     "connect-pg-simple": "^6.1.0",
     "cors": "^2.8.5",
@@ -18,10 +19,12 @@
     "express-session": "^1.17.1",
     "helmet": "^3.23.3",
     "morgan": "^1.10.0",
+    "mqtt": "^4.1.0",
     "pg": "^8.2.1",
     "pg-hstore": "^2.3.3",
     "pug": "^3.0.0",
     "uuid": "^8.2.0",
+    "websocket-stream": "^5.5.2",
     "ws": "^7.3.0"
   }
 }

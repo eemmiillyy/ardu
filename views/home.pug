@@ -1,11 +1,17 @@
 html
   head
     title= title
-  body
+  body(style="font-family: monospace;background: radial-gradient(lightblue, transparent);")
     h1= message
     a(href = '/') Main
     p name: #{user.username}
     p email: #{user.email}
+    //- div
+    //-   h3 register new device
+    //-   form(action='/registerDevice', method='POST')
+    //-     input(type='text' name='name' placeholder='name' required)
+    //-     input(type='text' name='mac' placeholder='MAC' required)
+    //-     input(type='submit')
     div
       h2 Device List
       table(style="width:100%; text-align:center")
@@ -15,7 +21,7 @@ html
             th Name
             th MAC
             th Last Online
-            th Paired With
+            th Current Peer MAC
         tbody
           each device, index in devices.length ? devices : []
             tr(class=(index % 2 == 0) ? 'odd' : 'even') 
@@ -23,21 +29,63 @@ html
               td= device.name
               td= device.mac 
               td= device.lastonline
-              td= ""
-    div
-      h2 System Actions
+              td
+                if (device.pairedWith.length > 0)
+                  =device.pairedWith + " "
+                  button(class="btn btn-small" type="button" value=device.pairedWith onclick='clickReject(' + JSON.stringify(device.pairedWith) +')') unpair
+                else
+                  =device.pairedWith
+    each device, index in devices.length ? devices : []          
       div
-        h3 Switch light
-        button(type='button' value="on" onclick='clickButton(' + 1 + ')') on
-        button(type='button' value="off" onclick='clickButton(' + 0 + ')') off
-      div
-        h3 register device
-        form(action='/registerDevice', method='POST')
-          input(type='text' name='name' placeholder='name' required)
-          input(type='text' name='mac' placeholder='MAC' required)
-          input(type='submit')
+        div
+          h3 Create Invitation from #{device.id}
+          form(action='/invite/new', method='POST')
+            input(type='text' name='recipientID' placeholder='Recipients MAC' required)
+            input(type='number' value=device.id name='senderID' required style="display: none;")
+            input(type='submit')   
+        div
+          h3 Switch light for #{device.id}
+          button(type='button' value="on" onclick='clickButton(' + 1 + ')') on
+          button(type='button' value="off" onclick='clickButton(' + 0 + ')') off
+      div 
+        h2 Sent From #{device.id}
+        table(style="width:100%; text-align:center")
+          thead
+            tr
+              th To
+              th Seen
+              th Status
+          tbody
+            each invitation, index in device.invitations.filter(invitation => invitation.senderid === device.id)
+              tr(class=(index % 2 == 0) ? 'odd' : 'even') 
+                td= invitation.recipientid
+                td= invitation.seenat ? invitation.seenat  : "nope"
+                td= invitation.accepted === true ? "Accepted" : (invitation.accepted === false) ? "Rejected" : " - "
+        h2 Recieved By #{device.id}
+        table(style="width:100%; text-align:center")
+          thead
+            tr
+              th From
+              th Created At
+              th 
+          tbody
+            each invitation, index in device.invitations.filter(invitation => invitation.recipientid === device.id)
+              tr(class=(index % 2 == 0) ? 'odd' : 'even') 
+                td= invitation.senderid
+                td= invitation.createdat ? invitation.createdat  : "no"
+                td
+                  if (invitation.accepted === true)
+                    button(class="btn btn-small" type="button" disabled onclick='clickAccept(' + invitation.id +')') accepted
+                  else if (!invitation.accepted && invitation.expired)
+                    button(class="btn btn-small" type="button" disabled onclick='clickAccept(' + invitation.id +')') accept
+                  else
+                    button(class="btn btn-small" type="button" onclick='clickAccept(' + invitation.id +')') accept
+
 
   script. 
+    function reloadPage(e) {
+      location.reload();
+    };
     function clickButton(value) {
       var xhr = new XMLHttpRequest();
       xhr.open("POST", "/sendBitThroughGui", true);
@@ -45,5 +93,26 @@ html
       xhr.onload = function() {
         console.log(this.responseText);
       }
-      xhr.send("value=" + value);
+      xhr.send("value=" + value)
+      xhr.addEventListener('loadend', reloadPage);
+    }
+    function clickAccept(value) {
+      var xhr= new XMLHttpRequest();
+      xhr.open("POST", "/invite/accept", true);
+      xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
+      xhr.onload = function() {
+        console.log(this.responseText);
+      }
+      xhr.send("value=" + value)
+      xhr.addEventListener('loadend', reloadPage);
+    }
+    function clickReject(value) {
+      var xhr= new XMLHttpRequest();
+      xhr.open("POST", "/invite/reject", true);
+      xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
+      xhr.onload = function() {
+        console.log(this.responseText);
+      }
+      xhr.send("value=" + value)
+      xhr.addEventListener('loadend', reloadPage);
     }
